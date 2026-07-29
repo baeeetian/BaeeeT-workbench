@@ -1,0 +1,25 @@
+{
+  "name": "兔几工作台",
+  "short_name": "兔几",
+  "lang": "zh-CN",
+  "start_url": "./index.html#home",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f0e7",
+  "theme_color": "#f5f0e7",
+  "description": "一个安静、可迁移的个人工作台。",
+  "icons": [
+    {
+      "src": "assets/tuji-rabbit-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/tuji-rabbit-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
