@@ -38,7 +38,7 @@
     h1 { font-size:clamp(31px,5vw,58px); line-height:1.08; margin-bottom:12px; }
     h2 { font-size:clamp(24px,3vw,34px); margin-bottom:8px; }
     h3 { font-size:20px; margin-bottom:6px; }
-    .page-head { display:block; margin:4px 0 24px; }
+    .page-head { display:block; margin:4px 0 24px; padding-top:30px; }
     .page-head .title-line { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .page-head .title-line h1 { min-width:0; margin:0; }
     .page-head .title-line .head-actions { flex:none; }
@@ -154,9 +154,11 @@
     .sync-status { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
     .sync-dot { width:8px; height:8px; flex:none; border-radius:50%; background:#879a8b; }
     .sync-status.offline .sync-dot { background:#b9b1a8; }
+    .sync-status-mobile { justify-content:flex-end; margin:0 2px 8px; font-size:11px; }
+    @media (min-width:1024px) { .sync-status-mobile { display:none; } }
     @media (max-width:679px) { .main { padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 150px); } .page-head .head-actions { flex:none; } .page-head .head-actions .btn { min-width:0; } }
     @media (min-width:680px) { .main { padding:36px 32px 60px; } .dashboard-grid { grid-template-columns:1fr 1fr; } .hero { grid-column:1/-1; } .grid-two { grid-template-columns:1fr 1fr; } .form-grid.two { grid-template-columns:1fr 1fr; } .board { grid-template-columns:repeat(3,1fr); } .home-intro { padding:28px 6px 38px; } }
-    @media (min-width:1024px) { .app-shell { display:grid; grid-template-columns:236px 1fr; } .sidebar { display:flex; position:sticky; top:0; height:100dvh; flex-direction:column; padding:26px 16px; border-right:1px solid var(--line); background:rgba(245,240,231,.74); } .desktop-nav { display:grid; gap:6px; margin-top:44px; } .desktop-nav .nav-item { display:flex; justify-content:flex-start; gap:11px; padding:0 14px; color:var(--muted); font-size:14px; } .desktop-nav .nav-item.active { color:#fff; } .sidebar-bottom { margin-top:auto; display:grid; gap:5px; } .mobile-nav { display:none; } .main { padding:54px 50px 70px; } .content { max-width:1190px; } .hero-art { width:210px; height:196px; right:10%; } .toast { bottom:25px; } }
+    @media (min-width:1024px) { .app-shell { display:grid; grid-template-columns:236px 1fr; } .sidebar { display:flex; position:sticky; top:0; height:100dvh; flex-direction:column; padding:26px 16px; border-right:1px solid var(--line); background:rgba(245,240,231,.74); } .desktop-nav { display:grid; gap:6px; margin-top:44px; } .desktop-nav .nav-item { display:flex; justify-content:flex-start; gap:11px; padding:0 14px; color:var(--muted); font-size:14px; } .desktop-nav .nav-item.active { color:#fff; } .sidebar-bottom { margin-top:auto; display:grid; gap:5px; } .mobile-nav { display:none; } .main { padding:54px 50px 70px; } .page-head { padding-top:0; } .content { max-width:1190px; } .hero-art { width:210px; height:196px; right:10%; } .toast { bottom:25px; } }
     @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; transition-duration:.01ms !important; } }
   </style>
 </head>
@@ -209,6 +211,7 @@
     let state = loadState();
     let currentRoute = location.hash.slice(1) || 'home';
     let timerId = null;
+    let newsAutoRequested = false;
     let idbWriteQueue=Promise.resolve();
     function loadState(){ try { const raw=localStorage.getItem(KEY); return raw?{...initialState(),...JSON.parse(raw)}:initialState(); } catch { return initialState(); } }
     function openStateDb(){ return new Promise((resolve,reject)=>{ if(!('indexedDB' in window))return reject(new Error('IndexedDB unavailable')); const req=indexedDB.open('tuji-workbench',1); req.onupgradeneeded=()=>req.result.createObjectStore('state',{keyPath:'id'}); req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); }
@@ -256,7 +259,8 @@
     function pauseTimer(){ const elapsed=Math.floor((Date.now()-state.pomodoro.startedAt)/1000); update(s=>({...s,pomodoro:{...s.pomodoro,remaining:Math.max(0,s.pomodoro.remaining-elapsed),running:false,startedAt:null}})); clearInterval(timerId); }
     function resetTimer(){ clearInterval(timerId); update(s=>({...s,pomodoro:{duration:25*60,remaining:25*60,running:false,startedAt:null}})); }
     function runTimer(){ clearInterval(timerId); timerId=setInterval(()=>{ if(!state.pomodoro.running)return; const left=Math.max(0,state.pomodoro.remaining-Math.floor((Date.now()-state.pomodoro.startedAt)/1000)); if(left<=0){clearInterval(timerId); update(s=>({...s,pomodoro:{...s.pomodoro,remaining:0,running:false,startedAt:null}})); toast('番茄钟结束，起来活动一下。'); if('Notification'in window&&Notification.permission==='granted')new Notification('兔几提醒你：起来活动一下');} else { document.querySelector('.timer')?.replaceChildren(document.createTextNode(fmtClock(left))); } },1000); }
-    async function fetchNews(){ const btn=document.querySelector('[data-fetch-news]'); if(btn){btn.disabled=true;btn.querySelector('span').textContent='获取中…';} try { const res=await fetch('https://hn.algolia.com/api/v1/search_by_date?query=AI&tags=story&hitsPerPage=10'); if(!res.ok)throw new Error(); const json=await res.json(); const items=(json.hits||[]).filter(x=>x.title&&x.url).slice(0,5).map(x=>({id:'news-'+x.objectID,title:x.title,source:'Hacker News',time:new Date(x.created_at).toLocaleDateString('zh-CN',{month:'short',day:'numeric'}),url:x.url,isExample:false})); if(!items.length)throw new Error(); update(s=>({...s,newsCache:{items,fetchedAt:Date.now(),isExample:false}})); toast('今天的 5 条科技动态已更新。'); } catch { toast('网络暂时不可用，已保留上次内容。'); } finally { renderApp(); } }
+    async function fetchNews(silent=false){ const btn=document.querySelector('[data-fetch-news]'); if(btn){btn.disabled=true;btn.querySelector('span').textContent='获取中…';} try { const res=await fetch('https://hn.algolia.com/api/v1/search_by_date?query=AI&tags=story&hitsPerPage=10'); if(!res.ok)throw new Error(); const json=await res.json(); const items=(json.hits||[]).filter(x=>x.title&&x.url).slice(0,5).map(x=>({id:'news-'+x.objectID,title:x.title,source:'Hacker News',time:new Date(x.created_at).toLocaleDateString('zh-CN',{month:'short',day:'numeric'}),url:x.url,isExample:false})); if(!items.length)throw new Error(); update(s=>({...s,newsCache:{items,fetchedAt:Date.now(),isExample:false}})); if(!silent)toast('今天的 5 条科技动态已更新。'); } catch { if(!silent)toast('网络暂时不可用，已保留上次内容。'); } finally { renderApp(); } }
+    async function refreshNewsOnOpen(){ if(newsAutoRequested||!navigator.onLine)return; newsAutoRequested=true; await fetchNews(true); }
     function b64(bytes){ return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
     function unb64(s){ return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); }
     async function derive(pass,salt){ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:120000,hash:'SHA-256'},key,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); }
@@ -270,10 +274,10 @@
     const backupInput=document.querySelector('#backup-file'); if(backupInput)backupInput.addEventListener('change',e=>{ const file=e.target.files?.[0]; if(file)importBackup(file).catch(err=>toast(err.message==='OperationError'?'备份密码不正确。':'导入失败，请确认文件完整。')); e.target.value=''; });
     window.addEventListener('hashchange',()=>{currentRoute=location.hash.slice(1)||'home';renderApp();});
     document.querySelector('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')e.currentTarget.close();});
-    function updateConnectionStatus(){ const online=navigator.onLine; let el=document.querySelector('#sync-status'); if(!el){ const host=document.querySelector('.sidebar-bottom'); if(host){ el=document.createElement('small'); el.id='sync-status'; el.className='sync-status'; el.setAttribute('aria-live','polite'); el.innerHTML='<span class="sync-dot" aria-hidden="true"></span><span></span>'; host.appendChild(el); } } if(el){ el.classList.toggle('offline',!online); el.querySelector('span:last-child').textContent=online?'🟢 在线 · 本地已保存':'⚪ 离线 · 本地已保存'; } }
+    function updateConnectionStatus(){ const online=navigator.onLine; let el=document.querySelector('#sync-status'); if(!el){ const host=document.querySelector('.sidebar-bottom'); if(host){ el=document.createElement('small'); el.id='sync-status'; el.className='sync-status'; el.setAttribute('aria-live','polite'); el.innerHTML='<span class="sync-dot" aria-hidden="true"></span><span></span>'; host.appendChild(el); } } let mobile=document.querySelector('#sync-status-mobile'); if(!mobile){ const host=document.querySelector('#main-content'); if(host){ mobile=document.createElement('small'); mobile.id='sync-status-mobile'; mobile.className='sync-status sync-status-mobile'; mobile.setAttribute('aria-live','polite'); mobile.innerHTML='<span class="sync-dot" aria-hidden="true"></span><span></span>'; host.prepend(mobile); } } [el,mobile].filter(Boolean).forEach(item=>{ item.classList.toggle('offline',!online); item.querySelector('span:last-child').textContent=online?'🟢 在线 · 本地已保存':'⚪ 离线 · 本地已保存'; }); }
     window.addEventListener('online',updateConnectionStatus); window.addEventListener('offline',updateConnectionStatus);
     window.TujiApp={get state(){return state},navigate:nav,saveState:saveState};
-    renderApp(); updateConnectionStatus(); hydrateFromIndexedDb(); if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{}); if(state.pomodoro.running)runTimer();
+    renderApp(); updateConnectionStatus(); hydrateFromIndexedDb(); refreshNewsOnOpen(); if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{}); if(state.pomodoro.running)runTimer();
   })();
   </script>
 </body>
